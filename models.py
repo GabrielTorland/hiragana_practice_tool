@@ -14,5 +14,6 @@ class TMClassifier:
 
     def predict(self, strokes):
         image = draw_strokes_to_image(strokes, (28, 28), (800, 800))
+        image = image.reshape(1, 28, 28)
         prediction = self.tm.predict(image)
-        return self.class_translation_table[prediction]
+        return self.class_translation_table[prediction[0]]

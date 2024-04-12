@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import pygame
 
 def draw_strokes_to_image(strokes, target_resolution, original_resolution):
     # Initialize a black image with the original resolution
@@ -18,7 +19,7 @@ def draw_strokes_to_image(strokes, target_resolution, original_resolution):
         max_x, max_y = max(max_x, points[..., 0].max()), max(max_y, points[..., 1].max())
 
         # Draw stroke on the image
-        cv2.polylines(image, [points], isClosed=False, color=(255), thickness=8)
+        cv2.polylines(image, [points], isClosed=False, color=(255), thickness=16)
 
     # Determine cropping box
     width, height = max_x - min_x, max_y - min_y
@@ -40,3 +41,42 @@ def draw_strokes_to_image(strokes, target_resolution, original_resolution):
     image = image.astype(np.float32)/255.0
 
     return image
+
+
+class GameDrawer:
+    def __init__(self, screen, background, foreground) -> None:
+        self.screen = screen
+        self.background = background
+        self.foreground = foreground
+
+    def draw_current_stroke(self, current_stroke):
+        if len(current_stroke) < 2:
+            return
+        pygame.draw.lines(self.screen, self.foreground, False, current_stroke, 5)
+        pygame.display.flip()
+
+    def __reset_screen(self):
+        self.screen.fill(self.background)
+
+    def __draw_character(self, character, position):
+        self.screen.blit(character, position)
+
+    def draw_initial_state(self, character, position):
+        self.__reset_screen()
+        self.__draw_character(character, position)
+        pygame.display.flip()
+    
+    def draw_current_state(self, strokes, current_stroke, character, position):
+        self.__reset_screen()
+        self.__draw_character(character, position)
+
+        # Draw previous strokes
+        if len(strokes) != 0:
+            for stroke in strokes:
+                pygame.draw.lines(self.screen, self.foreground, False, stroke, 5)
+
+        # Draw current stroke        
+        if len(current_stroke) > 1:
+            pygame.draw.lines(self.screen, self.foreground, False, current_stroke, 5)
+
+        pygame.display.flip()

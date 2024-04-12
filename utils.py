@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import pygame
+import csv
+import time
 
 def draw_strokes_to_image(strokes, target_resolution, original_resolution):
     # Initialize a black image with the original resolution
@@ -40,7 +42,18 @@ def draw_strokes_to_image(strokes, target_resolution, original_resolution):
 
     image = image.astype(np.float32)/255.0
 
+    # plot  image
+    plt.imshow(image, cmap='gray')
+    plt.show()
+
     return image
+
+def get_class_translation_table(): 
+    # Loading the character data
+    with open('k49_classmap.csv') as f:
+        reader = csv.reader(f)
+        next(reader)  # Skip header
+        return {int(label): desc for label, _, desc in reader}
 
 
 class GameDrawer:
@@ -65,7 +78,17 @@ class GameDrawer:
         self.__reset_screen()
         self.__draw_character(character, position)
         pygame.display.flip()
-    
+
+    def draw_mark(self, set_current_state, mark_path, duration=5):
+        check_mark = pygame.image.load(mark_path)
+        position = (self.screen.get_width() // 2 - check_mark.get_width() // 2,
+                    self.screen.get_height() // 2 - check_mark.get_height() // 2)
+
+        set_current_state()
+        self.screen.blit(check_mark, position)
+        pygame.display.flip()
+        time.sleep(duration)
+
     def draw_current_state(self, strokes, current_stroke, character, position):
         self.__reset_screen()
         self.__draw_character(character, position)

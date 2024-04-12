@@ -3,38 +3,27 @@ import sys
 from characters import get_hiragana_characters
 import random
 from models import TMClassifier
-from utils import GameDrawer
-import csv
+from config import WIDTH, HEIGHT, FOREGROUND, BACKGROUND, X_HIRAGANA, Y_HIRAGANA, TIMEOUT, CHECK_MARK_IMG_PATH, X_MARK_IMG_PATH
+from utils import GameDrawer, get_class_translation_table
+from functools import partial
 
 pygame.init()
 
-width, height = 800, 800
-screen = pygame.display.set_mode((width, height))
-
-foreground = (0, 0, 0)
-background = (255, 255, 255)
-screen.fill(background)
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
 strokes = []
 current_stroke = []
-
-# Loading the character data
-with open('k49_classmap.csv') as f:
-    reader = csv.reader(f)
-    next(reader)  # Skip header
-    class_translation_table = {int(label): desc for label, _, desc in reader}
-
 characters = get_hiragana_characters() 
 current_character = random.choice(characters)
 
 # Display first character to draw
 font = pygame.font.Font(None, 36)
-hiragana_text = font.render(current_character.romanji, True, foreground)
+hiragana_text = font.render(current_character.romanji, True, FOREGROUND)
 
-game_drawer = GameDrawer(screen, background, foreground)
-game_drawer.draw_initial_state(hiragana_text, (width - 80, 50))
+game_drawer = GameDrawer(screen, BACKGROUND, FOREGROUND)
+game_drawer.draw_initial_state(hiragana_text, (X_HIRAGANA, Y_HIRAGANA))
 
-tm = TMClassifier("/home/olepedersen/source/repos/hiragana_practice_tool/model.pk1", class_translation_table)
+tm = TMClassifier("/home/olepedersen/source/repos/hiragana_practice_tool/model.pk1", get_class_translation_table())
 
 while True:
 
@@ -59,23 +48,26 @@ while True:
             current_stroke = []
             if len(strokes) == current_character.nr_of_strokes:
                 prediction = tm.predict(strokes)
+                set_current_state = partial(game_drawer.draw_current_state, strokes, current_stroke, font.render(current_character.character, True, FOREGROUND), (X_HIRAGANA, Y_HIRAGANA))
                 if prediction == current_character.character:
                     print("Correct!")
-                else: 
+                    game_drawer.draw_mark(set_current_state, CHECK_MARK_IMG_PATH, TIMEOUT // 1000)
+                else:
                     print("Wrong!")
+                    game_drawer.draw_mark(set_current_state, X_MARK_IMG_PATH, TIMEOUT // 1000)
                 strokes = []
                 current_character = random.choice(characters)
-                hiragana_text = font.render(current_character.romanji, True, foreground)
-                game_drawer.draw_current_state(strokes, current_stroke, hiragana_text, (width - 80, 50))
+                hiragana_text = font.render(current_character.romanji, True, FOREGROUND)
+                game_drawer.draw_current_state(strokes, current_stroke, hiragana_text, (X_HIRAGANA, Y_HIRAGANA))
 
         # Undo last stroke
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
             if len(current_stroke) > 0:
                 current_stroke = []
-                game_drawer.draw_current_state(strokes, current_stroke, hiragana_text, (width - 80, 50))
+                game_drawer.draw_current_state(strokes, current_stroke, hiragana_text, (X_HIRAGANA, Y_HIRAGANA))
             elif len(strokes) > 0:
                 strokes.pop()
-                game_drawer.draw_current_state(strokes, current_stroke, hiragana_text, (width - 80, 50))
+                game_drawer.draw_current_state(strokes, current_stroke, hiragana_text, (X_HIRAGANA, Y_HIRAGANA))
         
         if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
             pygame.quit()

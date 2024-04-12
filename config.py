@@ -1,0 +1,12 @@
+
+WIDTH, HEIGHT = 800, 800
+
+FOREGROUND = (0, 0, 0)
+BACKGROUND = (255, 255, 255)
+
+Y_HIRAGANA = 50
+X_HIRAGANA = WIDTH - 80
+
+TIMEOUT = 4000
+CHECK_MARK_IMG_PATH = "check_mark_small.png"
+X_MARK_IMG_PATH = "x_mark_small.jpg"

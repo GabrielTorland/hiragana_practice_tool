@@ -17,8 +17,9 @@ characters = get_hiragana_characters()
 current_character = random.choice(characters)
 
 # Display first character to draw
-font = pygame.font.Font(None, 36)
-hiragana_text = font.render(current_character.romanji, True, FOREGROUND)
+romanji_font = pygame.font.Font(None, 36)
+hiragana_font = pygame.font.Font("static/NotoSansJP-Black.ttf", 36)
+hiragana_text = romanji_font.render(current_character.romanji, True, FOREGROUND)
 
 game_drawer = GameDrawer(screen, BACKGROUND, FOREGROUND)
 game_drawer.draw_initial_state(hiragana_text, (X_HIRAGANA, Y_HIRAGANA))
@@ -48,7 +49,7 @@ while True:
             current_stroke = []
             if len(strokes) == current_character.nr_of_strokes:
                 prediction = tm.predict(strokes)
-                set_current_state = partial(game_drawer.draw_current_state, strokes, current_stroke, font.render(current_character.character, True, FOREGROUND), (X_HIRAGANA, Y_HIRAGANA))
+                set_current_state = partial(game_drawer.draw_current_state, strokes, current_stroke, hiragana_font.render(current_character.character, True, FOREGROUND), (X_HIRAGANA, Y_HIRAGANA))
                 if prediction == current_character.character:
                     print("Correct!")
                     game_drawer.draw_mark(set_current_state, CHECK_MARK_IMG_PATH, TIMEOUT // 1000)
@@ -57,7 +58,7 @@ while True:
                     game_drawer.draw_mark(set_current_state, X_MARK_IMG_PATH, TIMEOUT // 1000)
                 strokes = []
                 current_character = random.choice(characters)
-                hiragana_text = font.render(current_character.romanji, True, FOREGROUND)
+                hiragana_text = romanji_font.render(current_character.romanji, True, FOREGROUND)
                 game_drawer.draw_current_state(strokes, current_stroke, hiragana_text, (X_HIRAGANA, Y_HIRAGANA))
 
         # Undo last stroke

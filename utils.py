@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import pygame
 import csv
 import time
+import torch.nn as nn
+from torchvision import models
 
 def draw_strokes_to_image(strokes, target_resolution, original_resolution):
     # Initialize a black image with the original resolution
@@ -103,3 +105,15 @@ class GameDrawer:
             pygame.draw.lines(self.screen, self.foreground, False, current_stroke, 5)
 
         pygame.display.flip()
+
+class MobileNet(nn.Module):
+    def __init__(self, num_classes=49):
+        # https://www.researchgate.net/publication/369777559_A_Robust_Residual_Shrinkage_Balanced_Network_for_Image_Recognition_from_Japanese_Historical_Documents
+        super(MobileNet, self).__init__()
+        self.mobilenet = models.mobilenet_v3_large(weights=None)
+        # self.mobilenet = models.mobilenet_v3_large(weights="MobileNet_V3_Large_Weights.DEFAULT")
+        self.mobilenet.features[0][0] = nn.Conv2d(1, 16, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        self.mobilenet.classifier[3] = nn.Linear(1280, out_features=num_classes, bias=True)
+
+    def forward(self, x):
+        return self.mobilenet(x)

@@ -18,7 +18,7 @@ class TMClassifier(Model):
 
     def load_model(self):
         self.model_state = pickle.load(open(self.model_path, "rb"))
-        self.tm = MultiClassConvolutionalTsetlinMachine2D(2000, 5000, 5.0, (10, 10))
+        self.tm = MultiClassConvolutionalTsetlinMachine2D(10000, 5000, 5.0, (10, 10))
         self.tm.__setstate__(self.model_state)
 
     def predict(self, strokes):

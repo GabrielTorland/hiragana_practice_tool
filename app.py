@@ -1,32 +1,41 @@
 import pygame
 import sys
 from characters import get_hiragana_characters
+import random
+from models import TMClassifier, MobileNetClassifier
+from config import WIDTH, HEIGHT, FOREGROUND, BACKGROUND, X_HIRAGANA, Y_HIRAGANA, TIMEOUT, CHECK_MARK_IMG_PATH, X_MARK_IMG_PATH
+from utils import GameDrawer, get_class_translation_table
+from functools import partial
+from utils import MobileNet
 
 pygame.init()
 
-width, height = 800, 600
-screen = pygame.display.set_mode((width, height))
-
-black = (0, 0, 0)
-white = (255, 255, 255)
-screen.fill(white)
-pygame.display.flip()
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
 strokes = []
 current_stroke = []
-characters = get_hiragana_characters()
+characters = get_hiragana_characters() 
+current_character = random.choice(characters)
 
-def draw_strokes():
-    screen.fill(white)  # Clear screen
-    for stroke in strokes:
-        if len(stroke) > 1:
-            pygame.draw.lines(screen, black, False, stroke, 5)
-    pygame.display.flip()
+# Display first character to draw
+romanji_font = pygame.font.Font(None, 36)
+hiragana_font = pygame.font.Font("static/NotoSansJP-Black.ttf", 36)
+hiragana_text = romanji_font.render(current_character.romanji, True, FOREGROUND)
 
-nr_drawn_points = 0
+game_drawer = GameDrawer(screen, BACKGROUND, FOREGROUND)
+game_drawer.draw_initial_state(hiragana_text, (X_HIRAGANA, Y_HIRAGANA))
+
+model_type = "TM"
+
+if model_type == "TM":
+    model = TMClassifier("/home/olepedersen/source/repos/hiragana_practice_tool/model.pk1", get_class_translation_table())
+    model.load_model()
+else:
+    model = MobileNetClassifier("/home/olepedersen/source/repos/hiragana_practice_tool/mobilenet-hiragana.pth", get_class_translation_table())
+    model.load_model()
 
 while True:
-    
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -37,36 +46,38 @@ while True:
             current_stroke = [event.pos]
 
         # Draw stroke 
-        if event.type == pygame.MOUSEMOTION and nr_drawn_points > 0:
+        if event.type == pygame.MOUSEMOTION and len(current_stroke) > 0:
             current_stroke.append(event.pos)
+            if len(current_stroke) % 10 == 0:
+                game_drawer.draw_current_stroke(current_stroke)
 
         # Finish stroke 
         if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             strokes.append(current_stroke)
-            draw_strokes()           
             current_stroke = []
-            nr_drawn_points = 0
-            
+            if len(strokes) == current_character.nr_of_strokes:
+                prediction = model.predict(strokes)
+                set_current_state = partial(game_drawer.draw_current_state, strokes, current_stroke, hiragana_font.render(current_character.character, True, FOREGROUND), (X_HIRAGANA, Y_HIRAGANA))
+                if prediction == current_character.character:
+                    print("Correct!")
+                    game_drawer.draw_mark(set_current_state, CHECK_MARK_IMG_PATH, TIMEOUT // 1000)
+                else:
+                    print("Wrong!")
+                    game_drawer.draw_mark(set_current_state, X_MARK_IMG_PATH, TIMEOUT // 1000)
+                strokes = []
+                current_character = random.choice(characters)
+                hiragana_text = romanji_font.render(current_character.romanji, True, FOREGROUND)
+                game_drawer.draw_current_state(strokes, current_stroke, hiragana_text, (X_HIRAGANA, Y_HIRAGANA))
+
         # Undo last stroke
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
             if len(current_stroke) > 0:
                 current_stroke = []
-                draw_strokes()
-                num_points = 0
-            if len(current_stroke) > 0:
-                current_stroke = []
-                draw_strokes()
+                game_drawer.draw_current_state(strokes, current_stroke, hiragana_text, (X_HIRAGANA, Y_HIRAGANA))
             elif len(strokes) > 0:
                 strokes.pop()
-                draw_strokes()
+                game_drawer.draw_current_state(strokes, current_stroke, hiragana_text, (X_HIRAGANA, Y_HIRAGANA))
         
-        # Update screen
-        if len(current_stroke) > nr_drawn_points:
-            screen.fill(white)
-            if len(strokes) > 0:
-                for stroke in strokes:
-                    pygame.draw.lines(screen, black, False, stroke, 5)
-            if len(current_stroke) > 1:
-                pygame.draw.lines(screen, black, False, current_stroke, 5)
-            pygame.display.flip()
-            nr_drawn_points += 1
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
+            pygame.quit()
+            sys.exit()

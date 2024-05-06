@@ -2,10 +2,11 @@ import pygame
 import sys
 from characters import get_hiragana_characters
 import random
-from models import TMClassifier
+from models import TMClassifier, MobileNetClassifier
 from config import WIDTH, HEIGHT, FOREGROUND, BACKGROUND, X_HIRAGANA, Y_HIRAGANA, TIMEOUT, CHECK_MARK_IMG_PATH, X_MARK_IMG_PATH
 from utils import GameDrawer, get_class_translation_table
 from functools import partial
+from utils import MobileNet
 
 pygame.init()
 
@@ -17,13 +18,21 @@ characters = get_hiragana_characters()
 current_character = random.choice(characters)
 
 # Display first character to draw
-font = pygame.font.Font(None, 36)
-hiragana_text = font.render(current_character.romanji, True, FOREGROUND)
+romanji_font = pygame.font.Font(None, 36)
+hiragana_font = pygame.font.Font("static/NotoSansJP-Black.ttf", 36)
+hiragana_text = romanji_font.render(current_character.romanji, True, FOREGROUND)
 
 game_drawer = GameDrawer(screen, BACKGROUND, FOREGROUND)
 game_drawer.draw_initial_state(hiragana_text, (X_HIRAGANA, Y_HIRAGANA))
 
-tm = TMClassifier("/home/olepedersen/source/repos/hiragana_practice_tool/model.pk1", get_class_translation_table())
+model_type = "TM"
+
+if model_type == "TM":
+    model = TMClassifier("/home/olepedersen/source/repos/hiragana_practice_tool/model.pk1", get_class_translation_table())
+    model.load_model()
+else:
+    model = MobileNetClassifier("/home/olepedersen/source/repos/hiragana_practice_tool/mobilenet-hiragana.pth", get_class_translation_table())
+    model.load_model()
 
 while True:
 
@@ -47,8 +56,8 @@ while True:
             strokes.append(current_stroke)
             current_stroke = []
             if len(strokes) == current_character.nr_of_strokes:
-                prediction = tm.predict(strokes)
-                set_current_state = partial(game_drawer.draw_current_state, strokes, current_stroke, font.render(current_character.character, True, FOREGROUND), (X_HIRAGANA, Y_HIRAGANA))
+                prediction = model.predict(strokes)
+                set_current_state = partial(game_drawer.draw_current_state, strokes, current_stroke, hiragana_font.render(current_character.character, True, FOREGROUND), (X_HIRAGANA, Y_HIRAGANA))
                 if prediction == current_character.character:
                     print("Correct!")
                     game_drawer.draw_mark(set_current_state, CHECK_MARK_IMG_PATH, TIMEOUT // 1000)
@@ -57,7 +66,7 @@ while True:
                     game_drawer.draw_mark(set_current_state, X_MARK_IMG_PATH, TIMEOUT // 1000)
                 strokes = []
                 current_character = random.choice(characters)
-                hiragana_text = font.render(current_character.romanji, True, FOREGROUND)
+                hiragana_text = romanji_font.render(current_character.romanji, True, FOREGROUND)
                 game_drawer.draw_current_state(strokes, current_stroke, hiragana_text, (X_HIRAGANA, Y_HIRAGANA))
 
         # Undo last stroke

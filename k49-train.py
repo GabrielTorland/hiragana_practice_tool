@@ -1,5 +1,6 @@
 import torch
 import wandb
+import argparse
 import torch.optim as optim
 import torch.nn as nn
 import torchvision.models as models
@@ -9,32 +10,56 @@ import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 from torchvision import transforms, datasets
+from collections import Counter
+
 from Kuzushijidataset import Kuzushijidataset
 
-wandb.init(
-    # set the wandb project where this run will be logged
-    project="hiragana",
-    entity="junta",
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # track hyperparameters and run metadata
-    config={
-    "learning_rate": 0.0001,
-    "dataset": "k49",
-    "epochs": 100
-    }
-)
+parser = argparse.ArgumentParser(description="Training a model on the Kuzushiji dataset")
+parser.add_argument('--epochs', type=int, default=100, help='number of epochs to train')
+parser.add_argument('--model', type=str, choices=['alexnet', 'mobilenet_v3_large', 'mobilenet_v3_small'], help='model architecture', required=True)
+parser.add_argument('--input_channel', type=int, default=1, help='number of input channels (mobilenet_v3 requires at least 32x32, alexnet requires 227x227)')
+parser.add_argument('--learning_rate', type=float, default=0.0001, help='learning rate for optimizer')
+parser.add_argument('--resize', type=int, default=224, help='size to resize the images')
+parser.add_argument('--batch_size', type=int, default=128, help='size to resize the images')
+parser.add_argument('--wandb', action="store_true", help='Log results to wandb.ai (requires credentials)')
+args = parser.parse_args()
 
+print(f"Model: {args.model} \nNumber of epochs: {args.epochs} \nLearning rate: {args.learning_rate} \nImage resize: {args.resize} \nBatch size: {args.batch_size} \nInput channel: {args.input_channel}")
 
-# Load pretrained MobileNet
-model = models.mobilenet_v3_large(weights=None)
+if args.wandb:
+    wandb.init(
+        project="hiragana",
+        entity="junta",
+        name=f"{args.model}_{args.resize}-resize_{args.input_channel}-dimension",
+        config={
+            "dataset": "k49",
+            "epochs": args.epochs,
+            "model": args.model,
+            "resize": args.resize,
+            "learning_rate": args.learning_rate,
+            "input_channel": args.input_channel,
+            "batch_size": args.batch_size,
+        }
+    )
 
-# Modify the classifier
-model.features[0][0] = nn.Conv2d(in_channels=1, out_channels=model.features[0][0].out_channels, kernel_size=model.features[0][0].kernel_size)
-model.classifier[-1] = torch.nn.Linear(in_features=model.classifier[-1].in_features, out_features=49)
+if args.model == 'alexnet':
+    model = models.alexnet(weights=None, num_classes=49)
+    model.features[0] = nn.Conv2d(args.input_channel, 64, kernel_size=(11, 11), stride=(4, 4), padding=(2, 2))
+elif args.model == 'mobilenet_v3_large':
+    model = models.mobilenet_v3_large(weights="MobileNet_V3_Large_Weights.DEFAULT")
+    model.features[0][0] = nn.Conv2d(args.input_channel, model.features[0][0].out_channels, kernel_size=model.features[0][0].kernel_size)
+    model.classifier[-1] = torch.nn.Linear(in_features=model.classifier[-1].in_features, out_features=49)
+elif args.model == 'mobilenet_v3_small':
+    model = models.mobilenet_v3_small(weights="MobileNet_V3_Small_Weights.DEFAULT")
+    model.features[0][0] = nn.Conv2d(args.input_channel, model.features[0][0].out_channels, kernel_size=model.features[0][0].kernel_size)
+    model.classifier[-1] = torch.nn.Linear(in_features=model.classifier[-1].in_features, out_features=49)
+
 
 transform = transforms.Compose([
-    transforms.Grayscale(num_output_channels=1),
-    transforms.Resize((28, 28)),
+    transforms.Grayscale(num_output_channels=args.input_channel),
+    transforms.Resize((args.resize, args.resize)),
     transforms.ToTensor(),
     transforms.Normalize((0.1307,), (0.3081,))
 ])
@@ -45,14 +70,29 @@ test_data = Kuzushijidataset("k49-dataset", train=False, download=True, transfor
 print("Train dataset size: ", len(train_data))
 print("Test dataset size: ", len(test_data))
 
-train_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=128, shuffle=True) 
-test_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=128, shuffle=False)
+torch.manual_seed(42)
+train_loader = torch.utils.data.DataLoader(dataset=train_data, batch_size=args.batch_size, shuffle=True) 
+test_loader = torch.utils.data.DataLoader(dataset=test_data, batch_size=args.batch_size, shuffle=False)
+
+
+# Function to calculate the number of samples per class
+def count_samples_per_class(dataset):
+    label_counts = Counter(dataset.targets)
+    return label_counts
+    
+
+# Counting number of samples per class for training and test datasets
+train_label_counts = count_samples_per_class(train_data)
+train_label_counts = dict(sorted(train_label_counts.items()))
+highest_num_class = max(train_label_counts.values())
 
 # Loss function
-criterion = torch.nn.CrossEntropyLoss()
+M_data = [float(highest_num_class / train_label_counts[i]) for i in range(len(train_label_counts))]
+M = torch.tensor(M_data).to(device)
+criterion = torch.nn.CrossEntropyLoss(weight=M)
 
 # Optimizer (You can use Adam or another suitable optimizer)
-optimizer = optim.Adam(model.parameters(), lr=0.0001)
+optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
 
 # Calculate accuracy (a classification metric)
 def accuracy_fn(y_true, y_pred):
@@ -65,14 +105,11 @@ def accuracy_fn(y_true, y_pred):
     acc = (correct / len(y_pred)) * 100
     return acc
 
-# Number of epochs
-num_epochs = 100
 losses = []
-# Move model to GPU if available
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = model.to(device)
 
-for epoch in range(num_epochs):
+torch.manual_seed(42)
+for epoch in range(args.epochs):
     model.train()
     running_loss = 0.0
     with tqdm(train_loader, unit="batch") as tepoch:
@@ -152,22 +189,13 @@ for epoch in range(num_epochs):
     
         # Calculate accuracy
         accuracy = correct / total
-        print(f'Accuracy of the model on arbitrary images: {accuracy * 100:.2f}%')
-            
-        ## Print out what's happening
-        # print(f"\nTrain loss: {train_loss:.5f} | Test loss: {test_loss:.5f}, Test acc: {test_acc:.2f}%\n")
-        wandb.log({
-            "train_loss": train_loss,
-            "test_loss": test_loss,
-            "test_accuracy": test_acc,
-            "extern_dataset_accuracy": accuracy * 100
-        })
+        print(f'Accuracy of the model on another dataset: {accuracy * 100:.2f}%')
+        if args.wandb:
+            wandb.log({
+                "train_loss": train_loss,
+                "test_loss": test_loss,
+                "test_accuracy": test_acc,
+                "extern_dataset_accuracy": accuracy * 100
+            })
 
-
-# torch.save(model.state_dict(), "temp-3_large-3-100-0001.pth")
-
-#sns.set_style("dark")
-#sns.lineplot(data=losses).set(title="loss change during training", xlabel="epoch", ylabel="loss")
-#plt.savefig("loss_graph.png")
-#plt.close()
-
+torch.save(model.state_dict(), f"{args.model}_{args.epochs}-epochs_{args.resize}-resize_{args.learning_rate}-lr_{args.input_channel}-dim.pth")

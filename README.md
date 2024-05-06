@@ -40,3 +40,6 @@ After starting the application:
 - `static/`: Directory containing static files like images (check marks and x marks).
 - `requirements.txt`: File listing all dependencies needed to run the project.
 - `*.ipynb`: Jupyter notebooks for training and evaluating the model.
+- `k49-train.py`: Script to train MobileNetV3 model
+- `Kuzushijidataset.py`: Class to download and import k49 dataset
+- `mobilenet_v3_large_50-epochs_32-resize_0.0001-lr_1-dim_fin.pth`: 50 epoch trained MobileNetV3Large on K49
